@@ -31,6 +31,11 @@ import org.apache.flink.util.CollectionUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.yaml.snakeyaml.Yaml;
+import org.yaml.snakeyaml.error.YAMLException;
+import java.io.File;
+import java.io.FileInputStream;
+
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -66,6 +71,7 @@ public class Configuration extends ExecutionConfig.GlobalJobParameters
     private static final byte TYPE_FLOAT = 4;
     private static final byte TYPE_DOUBLE = 5;
     private static final byte TYPE_BYTES = 6;
+    private static boolean isFirstThread = true;
 
     /** The log object used for debugging. */
     private static final Logger LOG = LoggerFactory.getLogger(Configuration.class);
@@ -83,6 +89,50 @@ public class Configuration extends ExecutionConfig.GlobalJobParameters
     /** Creates a new empty configuration. */
     public Configuration() {
         this.confData = new HashMap<>();
+        if (isFirstThreadAndFlip()) {
+            ctestInjection();
+        }
+    }
+    
+    private synchronized boolean isFirstThreadAndFlip() {
+        boolean tmp = isFirstThread;
+        isFirstThread = false;
+        return tmp;
+    }
+    
+    private void ctestInjection() {
+        String filePath = System.getProperty("user.dir") + "/core-ctest.yaml";
+        File file = new File(filePath);
+
+        if (!file.exists()) {
+            LOG.warn("Configuration file not found: " + file.getAbsolutePath());
+            return;
+        }
+
+        try (InputStream inputStream = new FileInputStream(file)) {
+            Yaml yaml = new Yaml();
+            Map<String, Object> config = yaml.load(inputStream);
+
+            if (config != null) {
+                for (Map.Entry<String, Object> entry : config.entrySet()) {
+                    String key = entry.getKey();
+                    String value = String.valueOf(entry.getValue());
+
+                    if (key.isEmpty() || value.isEmpty()) {
+                        LOG.warn("Empty key or value in configuration file: " + key + ": " + value);
+                        continue;
+                    }
+
+                    setString(key.trim(), value.trim());
+                }
+            } else {
+                LOG.warn("Configuration file is empty or has invalid content: " + file.getAbsolutePath());
+            }
+        } catch (IOException e) {
+            throw new RuntimeException("[CTEST] Error reading YAML configuration.", e);
+        } catch (YAMLException e) {
+            throw new RuntimeException("[CTEST] Error parsing YAML configuration.", e);
+        }
     }
 
     /**
