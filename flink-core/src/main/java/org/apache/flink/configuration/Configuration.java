@@ -450,6 +450,15 @@ public class Configuration extends ExecutionConfig.GlobalJobParameters
         }
     }
 
+    //Ctest Get Stack Trace
+    private String getStackTrace() {
+        String stacktrace = " ";
+        for (StackTraceElement e : Thread.currentThread().getStackTrace()) {
+            stacktrace = stacktrace.concat(e.getClassName() + "\t");
+        }
+        return stacktrace;
+    }
+
     /**
      * Removes given key from the configuration.
      *
@@ -466,7 +475,7 @@ public class Configuration extends ExecutionConfig.GlobalJobParameters
 
     // --------------------------------------------------------------------------------------------
 
-    <T> void setValueInternal(String key, T value, boolean canBePrefixMap) {
+    <T> void setValueInternal(String key, T value, boolean canBePrefixMap, boolean logenabled) {
         if (key == null) {
             throw new NullPointerException("Key must not be null.");
         }
@@ -478,12 +487,19 @@ public class Configuration extends ExecutionConfig.GlobalJobParameters
             if (canBePrefixMap) {
                 removePrefixMap(this.confData, key);
             }
+            if(logenabled){
+                LOG.warn("[CTEST][SET-PARAM] " + key + getStackTrace());
+            }
             this.confData.put(key, value);
         }
     }
 
     private <T> void setValueInternal(String key, T value) {
-        setValueInternal(key, value, false);
+        setValueInternal(key, value, false, true);
+    }
+    
+    <T> void setValueInternal(String key, T value, boolean canBePrefixMap) {
+        setValueInternal(key, value, canBePrefixMap, true);
     }
 
     private Optional<Object> getRawValue(String key) {
@@ -497,6 +513,7 @@ public class Configuration extends ExecutionConfig.GlobalJobParameters
 
         synchronized (this.confData) {
             final Object valueFromExactKey = this.confData.get(key);
+            LOG.warn("[CTEST][GET-PARAM] " + key);
             if (!canBePrefixMap || valueFromExactKey != null) {
                 return Optional.ofNullable(valueFromExactKey);
             }
